@@ -4,6 +4,7 @@ services:
   app-node-liquibase:
     image: crkepler/app-node-liquibase
     container_name: app-node-liquibase
+    restart: always
     build:
       context: .
       dockerfile: Dockerfile.dev
