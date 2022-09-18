@@ -1,0 +1,33 @@
+{
+  "name": "NodeJS with LiquiBase",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "start:dev": "nodemon index.js nodemon",
+    "start:docker-dev": "docker compose -f docker-compose-dev.yml up",
+    "stop:docker-dev": "docker compose -f docker-compose-dev.yml down"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "liquibase/*",
+      ".gitignore",
+      "config/prod.yml"
+    ],
+    "delay": 2500
+  },
+  "dependencies": {
+    "command-line-args": "5.2.1",
+    "config": "3.3.8",
+    "dotenv": "16.0.2",
+    "fs-extra": "10.1.0",
+    "js-yaml": "4.1.0",
+    "klona": "2.0.5",
+    "liquibase": "4.4.0",
+    "traverse": "0.6.6",
+    "winston": "3.8.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
+}

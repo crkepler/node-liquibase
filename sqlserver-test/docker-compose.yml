@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  sqlserver1:
+    image: 'mcr.microsoft.com/mssql/server:2019-CU17-ubuntu-20.04' #feel free to select the 'latest' tag
+    container_name: sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Harr1s0n! #this password can be anything, it just needs to match the one defined in Liquibase
+      - MSSQL_PID=Developer #Developer (default) | Express | Standard | Enterprise | EnterpriseCore
+    ports:
+      - '1433:1433'
+    #comment: if wanting to use the sqlcmd tool inside the container:
+    #docker exec -it <container_id|container_name> /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P <your_password>
+    volumes:
+      - ./volumes:/var/opt/mssql/data

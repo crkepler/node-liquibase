@@ -1,0 +1,72 @@
+## the base image
+## Note: the alpine image doesn't work because it doesn't include the bash shell, which is required by Liquibase
+##FROM node:16-alpine
+
+FROM node:16
+
+## npm liquibase requires Java
+## Installs Java (JRE)
+
+RUN mkdir -p /usr/share/man/man1 /usr/share/man/man2 && \
+    apt-get update &&\
+    apt-get install -y --no-install-recommends openjdk-11-jre && \
+    apt-get install ca-certificates-java -y && \
+    apt-get clean && \
+    update-ca-certificates -f;
+ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
+#RUN export JAVA_HOME
+
+## any ollowing command will be executed relative
+#  to this path in the container
+WORKDIR '/app'
+
+COPY ./package.json ./
+
+RUN npm install
+
+# will use the cache from this point forward
+# copy all external files from the current folder to the container
+COPY . .
+
+# starts nodemon for hot reloads during development
+CMD ["npm", "run", "start:dev"]
+
+## You can ignore anything from here on, but this explains how to run
+## the container.
+##
+## To build this container image, run from the host (your laptop) ./app directory:
+## Don't forget the period at the end:
+##
+##      docker build -t crkepler/app-node-liquibase -f Dockerfile.dev .
+##
+## or if you don't want to tag the image. Don't run this!!!, shown just as an option
+##      docker build -f Dockerfile.dev .  ==> don't run this, tag the image
+##
+## This will show the image you just built:
+##      docker images
+##
+## To start the container in dev mode (with nodemon):
+## From ./app:
+##      docker compose -f docker-compose-dev.yml up
+##      docker compose -f docker-compose-dev.yml down
+##
+## Or, also from ./app
+##       npm run start:docker-dev
+##       npm run stop:docker-dev
+##
+## If not using docker compose, to run the container build in the prior step (run it from ./app):
+##
+##      docker run --rm --name app-node-liquibase -p 3100:3100 -v /app/node_modules -v $(pwd):/app crkepler/node-lb:latest
+##
+## Windows:
+##
+##      docker run --rm --name docker-lb -p 3100:3100 -v /app/node_modules -v %cd%:/app crkepler/node-lb:latest
+##
+## Notes:
+## ------
+## 1. The second port number must match the .env file NODE_EXPRESS_PORT
+## 2. the first -v with one parameter tells the container NOT to map this folder to the outside (local) volume
+## 3. The second -v $(pwd):/app maps the host (your laptop) folder to the /app folder in the container. This
+##    causes a "hot-reload" which is only suitable for DEV, not PROD. For DEV, we can't re-build a container
+##    every time we change the code.
+##

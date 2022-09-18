@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  app-node-liquibase:
+    image: crkepler/app-node-liquibase
+    container_name: app-node-liquibase
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3100:3100"
+    volumes:
+      - /app/node_modules
+      - .:/app
+      #- ./logs:/app/logs

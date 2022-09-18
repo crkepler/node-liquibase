@@ -1,0 +1,16 @@
+# This value is fixed, it's the location of the driver for the database used, MS-SQL Server in this case
+liquibaseClasspath: './node_modules/liquibase/dist/drivers/mssql-jdbc-7.4.1.jre8.jar'
+# There's only one single db to be used as a base reference.
+# This is the base DB that will be used as a reference when doing diffChangeLog (test_2 in this example):
+referenceUrl: jdbc:sqlserver://host.docker.internal:1433;database=test_2;TrustServerCertificate=True
+
+dbs:
+  - name: test_1
+    changeLogFile: liquibase/test_1/changelog_dev_01.yaml
+    # host.docker.internal == localhost (uses your computer as localhost, not the container)
+    url: jdbc:sqlserver://host.docker.internal:1433;database=test_1;TrustServerCertificate=True
+
+  - name: test_2
+    changeLogFile: liquibase/test_2/changelog_dev_02.yaml
+    # host.docker.internal == localhost (uses your computer as localhost, not the container)
+    url: jdbc:sqlserver://host.docker.internal:1433;database=test_2;TrustServerCertificate=True

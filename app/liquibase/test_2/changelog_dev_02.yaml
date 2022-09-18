@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: hrk
+      changes:
+        - createTable:
+            tableName: student
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: false
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: student_name
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: country_name
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 2
+      author: hrk
+      changes:
+        - createTable:
+            tableName: employee
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: false
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: lastname_firstname
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
