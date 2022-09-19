@@ -103,6 +103,6 @@ const main = async () => {
      */
     await waitForLogger().then().catch(e => {throw e});
 }
-main().catch(e => console.log(`main: logger error`, e));
+main();
 
 

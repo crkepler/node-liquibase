@@ -9,6 +9,7 @@ const {klona} = require('klona/full');
 const sensitiveKeys = [
     /cookie/i,
     /passw(or)?d/i,
+    /referencepassw(or)?d/i, //added, since it's a Liquibase parameter
     /^pw$/,
     /^pass$/i,
     /secret/i,
@@ -23,9 +24,23 @@ function isSensitiveKey(keyStr) {
 }
 
 function redactObject(obj) {
-    traverse(obj).forEach(function redactor() {
+    traverse(obj).forEach(function redactor(value) {
         if (isSensitiveKey(this.key)) {
             this.update("[REDACTED]");
+            /**
+             * This else if section deals with Liquibase logging the command line full syntax,
+             * including passwords. The 'message' and 'stack' properties have escaped quotes,
+             * so it's a slightly different regex match.
+             * Note: we can't redact (stop) Liquibase's output to the console, but we can redact
+             * everything going to our log files (e.g. activity.log and error.log).
+             */
+        } else if (this.key === 'cmd' || this.key === 'message' || this.key === 'stack') {
+            let redactedText1 = value.replace(/--password="(.*?)"/gim, '--password=[REDACTED]');
+            let redactedText2 = redactedText1.replace(/--referencePassword="(.*?)"/gim, '--referencePassword=[REDACTED]');
+            //With escaped quotes:
+            let redactedText3 = redactedText2.replace(/--password=\\"(.*?)\\"/gim, '--password=[REDACTED]');
+            let redactedText4 = redactedText3.replace(/--referencePassword=\\"(.*?)\\"/gim, '--referencePassword=[REDACTED]');
+            this.update(redactedText4);
         }
     });
 }
