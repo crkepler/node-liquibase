@@ -1,6 +1,6 @@
 databaseChangeLog:
 - changeSet:
-    id: 1663539012624-3
+    id: 1663602709487-3
     author: root (generated)
     changes:
     - addColumn:
@@ -12,35 +12,35 @@ databaseChangeLog:
             type: varchar(100 BYTE)
         tableName: employee
 - changeSet:
-    id: 1663539012624-4
+    id: 1663602709487-4
     author: root (generated)
     changes:
     - dropColumn:
         columnName: first_name
         tableName: employee
 - changeSet:
-    id: 1663539012624-5
+    id: 1663602709487-5
     author: root (generated)
     changes:
     - dropColumn:
         columnName: last_name
         tableName: employee
 - changeSet:
-    id: 1663539012624-6
+    id: 1663602709487-6
     author: root (generated)
     changes:
     - dropColumn:
         columnName: postal_code
         tableName: employee
 - changeSet:
-    id: 1663539012624-7
+    id: 1663602709487-7
     author: root (generated)
     changes:
     - dropColumn:
         columnName: postal_code
         tableName: student
 - changeSet:
-    id: 1663539012624-1
+    id: 1663602709487-1
     author: root (generated)
     changes:
     - modifyDataType:
@@ -48,7 +48,7 @@ databaseChangeLog:
         newDataType: varchar(30)
         tableName: student
 - changeSet:
-    id: 1663539012624-2
+    id: 1663602709487-2
     author: root (generated)
     changes:
     - modifyDataType:
