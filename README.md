@@ -80,11 +80,12 @@ in AWS. To execute commands in an existing container:
 So, we will create the tables in ``test_1`` and ``test_2`` with the first
 command:
 
-``docker exec app-node-liquibase node index update``
+``docker exec app-node-liquibase node index update -c init-1``
 
 * ``app-node-liquibase`` is the name of the container ``docker compose`` started
 * ``node index`` is the program to run in the container. More about it in the next section.
-* ``update`` is the command passed to the program. It can be ``update | status | diff``. 
+* ``update`` is the command passed to the program. It can be ``update | status | diffChangeLog``.
+* `-c (--changeLogFileSuffix)` is a required suffix to make all files unique. You define the suffix in the diffChegeLog operation and then you can pass in the same suffix for the update operation
 
 After the command runs, you can see the created tables with your SQL Editor.
 
@@ -101,7 +102,7 @@ This is the application command line syntax:
 * ``command`` - it can only be 3 at this time: ``update``, ``diff``, or ``status``. ``status`` is for testing connections only.
 * ``options`` 
   * ``--databases``: a list of databases to use: ``--databases db1 db2 dbn`` or ``-d`` for short. If no databases are passed, the default is ``all``
-  * ``--chanlogFileSuffix``: applies to ``diff`` only. An optional suffix to the file name the ``diff`` command outputs. The default is an empty string (no suffix)
+  * ``--chanlogFileSuffix``: A required suffix to the file name for the ``diffChangeLog`` command outputs. Then the same suffix (file name) can be used in a follow up 'update' operation.
 
 ### Inputs
 Everything related to Liquibase and database operations is configured in the ``./config`` and ``./liquibase`` 
@@ -119,13 +120,12 @@ in each folder, must match the definitions in the ``./config`` files.
 
 ### Outputs
 
-1. ``liquibase`` - the only database output at this release is what is produced by the ``diff`` command. The file format
-is as follows:
+1. ``liquibase`` - all generated Liquibase files are in this directory. You may create your own as well. This is the fixed file format for all operations:
 
-    ``<database-name-in-the-config-file>_changelog_diff<optional-suffix>.yaml``
+    ``<database-name-in-the-config-file>_changelog_<command-line-suffix>.yaml``
 
     Example:
-``test_1_changelog_diff_sunday.yaml`` if ``-c sunday`` is passed with the ``diff`` command.
+``test_1_changelog_sunday.yaml`` if ``-c sunday`` is passed with the ``diffChangeLog`` command.
 </br>
 </br>
 
