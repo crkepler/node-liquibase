@@ -17,6 +17,8 @@
     "delay": 2500
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.171.0",
+    "@aws-sdk/credential-providers": "^3.171.0",
     "command-line-args": "5.2.1",
     "config": "3.3.8",
     "dotenv": "16.0.2",

@@ -1,6 +1,7 @@
 const config = require('config');
 const {Liquibase} = require("liquibase");
-const {logger} = require('./loggerConfig');
+const {logger} = require('../utils//loggerConfig');
+const secrets = require('../utils/secretsConfig');
 
 /**
  * The next three functions are the same thing, except for their operation: status(), update(),
@@ -35,10 +36,22 @@ function processDbUpdates(dbConfig, allStatus) {
     });
 }
 
-function processDbDiff(dbConfig, allStatus) {
+function processDbDiffChangeLog(dbConfig, allStatus) {
     return new Promise((resolve, reject) => {
         new Liquibase(dbConfig.db)
             .diffChangelog()
+            .then(status => {
+                allStatus.push({db: dbConfig.name, status: status || 'OK'});
+                resolve();
+            })
+            .catch(e => reject(e));
+    });
+}
+
+function processDbValidate(dbConfig, allStatus) {
+    return new Promise((resolve, reject) => {
+        new Liquibase(dbConfig.db)
+            .validate()
             .then(status => {
                 allStatus.push({db: dbConfig.name, status: status || 'OK'});
                 resolve();
@@ -58,18 +71,20 @@ const getLiquibaseConfig = dbsCmdLine => {
      * Read each entry from the config file
      */
     const dbConfigs = config.get('dbs');
+    const referenceDbSecret = secrets.getSecret('referenceDb');
     let dbConfigsParsed = [];
     dbConfigs.forEach(db => {
+        const dbSecret = secrets.getSecret(db.secretName); //get the secret based on what is configured in the dev.yml or production.yml file
         const dbConfig = {
             db: {
                 url: db.url,
-                changeLogFile: db.changeLogFile, //this will be overridden when the diff command is used
+                changeLogFile: 'need-to-override', //this will be overridden when the diff or update commands are used
                 classpath: config.get('liquibaseClasspath'),
-                username: process.env.MSSQL_USER, //assuming same username and password for all dbs
-                password: process.env.MSSQL_PASS,
+                username: dbSecret.username,
+                password: dbSecret.password,
                 referenceUrl: config.get('referenceUrl'),
-                referenceUsername: process.env.MSSQL_REFERENCE_DB_USER, //the reference DB (the base one)
-                referencePassword: process.env.MSSQL_REFERENCE_DB_PASS
+                referenceUsername: referenceDbSecret.username, //the reference DB (the base one)
+                referencePassword: referenceDbSecret.password,
             },
             name: db.name //this can't be part of the "db" object or liquibase will throw an error
         }
@@ -80,7 +95,9 @@ const getLiquibaseConfig = dbsCmdLine => {
             dbConfigsParsed.push(dbConfig);
         }
     });
-    logger.debug(`-----------ConfigsParsed`, dbConfigsParsed);
+    if (dbConfigsParsed.length <= 0) {
+        logger.error(`No database found. Check your command line parameters.`);
+    }
     return dbConfigsParsed;
 }
 
@@ -101,9 +118,13 @@ function executeLiquibaseConnections(operation, dbConfigsParsed) {
             case 'UPDATE':
                 await processDbUpdates(dbConfig, allStatus);
                 break;
-            case 'DIFF':
-                await processDbDiff(dbConfig, allStatus);
+            case 'DIFFCHANGELOG':
+                await processDbDiffChangeLog(dbConfig, allStatus);
                 break;
+            case 'VALIDATE':
+                await processDbValidate(dbConfig, allStatus);
+                break;
+
         }
     }))
         .then(() => {
@@ -122,9 +143,22 @@ function executeLiquibaseConnections(operation, dbConfigsParsed) {
  * Note: if there are too many databases and the scans are long, this operation may timeout.
  */
 
-const status = async commandLineDbs => {
-    let dbConfigsParsed = getLiquibaseConfig(commandLineDbs);
-    await executeLiquibaseConnections('STATUS', dbConfigsParsed);
+const status = async commandLineOptions => {
+    let dbConfigsParsed = getLiquibaseConfig(commandLineOptions);
+    /**
+     * For each DIFF, STATUS, or UPDATE a custom file SUFFIX is required. All file formats are the same:
+     *    <db-name>_changelog_<custom-suffix>.yaml
+     */
+    const overridenConfig = dbConfigsParsed.map(item => {
+        return {
+            ...item,
+            db: {
+                ...item.db,
+                changeLogFile: `liquibase/${item.name}_changelog_${commandLineOptions.changeLogFileSuffix}.yaml`
+            }
+        }
+    });
+    await executeLiquibaseConnections('STATUS', overridenConfig);
 }
 
 
@@ -134,58 +168,79 @@ const status = async commandLineDbs => {
  * Synchronously connect to all databases and updates them based on the checge_log files provided
  **********************************************************************************************************/
 
-const update = async commandLineDbs => {
-    let dbConfigsParsed = getLiquibaseConfig(commandLineDbs);
+const update = async commandLineOptions => {
+    let dbConfigsParsed = getLiquibaseConfig(commandLineOptions);
     /**
-     * If you need to override some Liquibase properties or even add new ones on-the-fly:
+     * For each DIFF, STATUS, or UPDATE a custom file SUFFIX is required. All file formats are the same:
+     *    <db-name>_changelog_<custom-suffix>.yaml
      */
-    /*
-    const overridenConfig = dbConfigsParsed.map(item => {
-        if (item.name === 'A-DB-NAME_HERE') {
+     const overridenConfig = dbConfigsParsed.map(item => {
             return {
                 ...item,
                 db: {
                     ...item.db,
-                    changeLogFile: 'liquibase/changelog_dev_01.xml'
+                    changeLogFile: `liquibase/${item.name}_changelog_${commandLineOptions.changeLogFileSuffix}.yaml`
                 }
             }
-        } else {
-            return item;
-        }
-    });
-    dbConfigsParsed = overridenConfig.length > 0 ? overridenConfig : dbConfigsParsed;
-    */
-    await executeLiquibaseConnections('UPDATE', dbConfigsParsed);
-};
+        });
+     //console.log(`------- overriden config ${JSON.stringify(overridenConfig, null, 2)}`);
+    await executeLiquibaseConnections('UPDATE', overridenConfig);
+}
 
 /**
- * DIFF operation
+ * diffChangeLog operation
  * Synchronously connect to all databases and gets their diffChangeLog
  * Note: if there are too many databases and the scans are long, this operation may timeout.
  */
 
-const diff = async commandLineOptions => {
+const diffChangeLog = async commandLineOptions => {
     let dbConfigsParsed = getLiquibaseConfig(commandLineOptions);
     /**
-     * DIFF is a special case: we need to create unique output file names for each DB
+     * For each DIFF, STATUS, or UPDATE a custom file SUFFIX is required. All file formats are the same:
+     *    <db-name>_changelog_<custom-suffix>.yaml
      */
     const overridenConfig = dbConfigsParsed.map(item => {
         return {
             ...item,
             db: {
                 ...item.db,
-                changeLogFile: `liquibase/${item.name}_changelog_diff${commandLineOptions.changeLogFileSuffix}.yaml`
+                changeLogFile: `liquibase/${item.name}_changelog_${commandLineOptions.changeLogFileSuffix}.yaml`
             }
         }
     });
-    //logger.debug(`-----------------overridenConfig ${JSON.stringify(overridenConfig, null, 2)}`);
-    await executeLiquibaseConnections('DIFF', overridenConfig);
+    await executeLiquibaseConnections('DIFFCHANGELOG', overridenConfig);
 };
+
+/**
+ * Validate operation
+ * Synchronously connect to all databases and gets their diffChangeLog
+ * Note: if there are too many databases and the scans are long, this operation may timeout.
+ */
+
+const validate = async commandLineOptions => {
+    let dbConfigsParsed = getLiquibaseConfig(commandLineOptions);
+    /**
+     * For each DIFFCHANGELOG, STATUS, or UPDATE a custom file SUFFIX is required. All file formats are the same:
+     *    <db-name>_changelog_<custom-suffix>.yaml
+     */
+    const overridenConfig = dbConfigsParsed.map(item => {
+        return {
+            ...item,
+            db: {
+                ...item.db,
+                changeLogFile: `liquibase/${item.name}_changelog_${commandLineOptions.changeLogFileSuffix}.yaml`
+            }
+        }
+    });
+    await executeLiquibaseConnections('VALIDATE', overridenConfig);
+};
+
 
 module.exports = {
     status,
     update,
-    diff
+    diffChangeLog,
+    validate
 }
 
 

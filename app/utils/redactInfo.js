@@ -35,12 +35,14 @@ function redactObject(obj) {
              * everything going to our log files (e.g. activity.log and error.log).
              */
         } else if (this.key === 'cmd' || this.key === 'message' || this.key === 'stack') {
-            let redactedText1 = value.replace(/--password="(.*?)"/gim, '--password=[REDACTED]');
-            let redactedText2 = redactedText1.replace(/--referencePassword="(.*?)"/gim, '--referencePassword=[REDACTED]');
-            //With escaped quotes:
-            let redactedText3 = redactedText2.replace(/--password=\\"(.*?)\\"/gim, '--password=[REDACTED]');
-            let redactedText4 = redactedText3.replace(/--referencePassword=\\"(.*?)\\"/gim, '--referencePassword=[REDACTED]');
-            this.update(redactedText4);
+            if (typeof value === 'String') {
+                let redactedText1 = value.replace(/--password="(.*?)"/gim, '--password=[REDACTED]');
+                let redactedText2 = redactedText1.replace(/--referencePassword="(.*?)"/gim, '--referencePassword=[REDACTED]');
+                //With escaped quotes:
+                let redactedText3 = redactedText2.replace(/--password=\\"(.*?)\\"/gim, '--password=[REDACTED]');
+                let redactedText4 = redactedText3.replace(/--referencePassword=\\"(.*?)\\"/gim, '--referencePassword=[REDACTED]');
+                this.update(redactedText4);
+            }
         }
     });
 }

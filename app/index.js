@@ -1,8 +1,9 @@
 require('dotenv').config();
 require('fs-extra').ensureDir(__dirname + '/logs');
-const {logger, waitForLogger} = require('./controllers/loggerConfig');
+const {logger, waitForLogger} = require('./utils/loggerConfig');
 const commandLineArgs = require('command-line-args');
 const dbController = require('./controllers/databaseController');
+const {initSecrets} = require('./utils/secretsConfig');
 
 /**
  * Parse the "main" command, the command in "node index.js <command>" and all
@@ -23,14 +24,9 @@ const parseCommandLine = () => {
     let definitions = [];
 
     /**
-     *  Second - parse the 'status', 'update', and 'diff' command options (definitions)
+     *  Second - parse the 'status', 'update', 'diffChangeLog', etc command options (definitions)
      */
-    if (command === 'status' || command === 'update') {
-        definitions = [
-            {name: 'databases', alias: 'd', type: String, multiple: true, defaultValue: ['all']}
-        ];
-
-    } else if (command === 'diff') {
+    if (command === 'diffChangeLog' || command === 'update' || command === 'status' || command === 'validate') {
         definitions = [
             {name: 'databases', alias: 'd', type: String, multiple: true, defaultValue: ['all']},
             {name: 'changeLogFileSuffix', alias: 'c', type: String, defaultValue: ''}
@@ -40,7 +36,7 @@ const parseCommandLine = () => {
     } else {
         return {
             error: true,
-            msg: `Unknown command: ${command}`
+            msg: `Unknown command: ${command}. Valid commands are: status | diffChangeLog | update | validate`
         }
     }
     /**
@@ -66,35 +62,39 @@ const parseCommandLine = () => {
  * If anything is invalid, it just exits the app
  * To-DO: add --help option to see how it should be used.
  */
-const init = () => {
+const initCommandLine = () => {
     const commandLineParameters = parseCommandLine();
 
     if (commandLineParameters && commandLineParameters.error) {
         logger.error(commandLineParameters);
         return null;
     } else {
-        /*if (commandLineParameters.command === 'diff' && (!commandLineParameters.options.changeLogFile)) {
-            logger.error('--changeLogFile option is required');
+        if (!commandLineParameters.options.changeLogFileSuffix) {
+            logger.error(`--changeLogFileSuffix (or -c) is required. E.g. -c change-01`);
             return null;
-        }*/
+        }
         logger.info('commandLineParameters', commandLineParameters);
         return commandLineParameters;
     }
 }
 
 const main = async () => {
-    const commandLine = init();
+    const commandLine = initCommandLine();
     if (commandLine) {
+        await initSecrets(); //calls the AWS Secrets Stores only once per app initialization
         const command = commandLine.command;
         switch (command) {
             case 'status':
                 await dbController.status(commandLine.options);
                 break;
-            case 'diff':
-                await dbController.diff(commandLine.options);
+            case 'diffChangeLog':
+                await dbController.diffChangeLog(commandLine.options);
                 break;
             case 'update':
                 await dbController.update(commandLine.options);
+                break;
+            case 'validate':
+                await dbController.validate(commandLine.options);
                 break;
         }
     }
@@ -106,3 +106,15 @@ const main = async () => {
 main();
 
 
+/*
+const main2 = async () => {
+    await secrets.initSecrets(); //calls the AWS Secrets Stores only once per app initialization
+    let secret1 = secrets.getSecret('allDbs');
+    let secret2 = secrets.getSecret('referenceDb');
+    let secret3 = secrets.getSecret('test_1');
+    console.log(` secret1: ${JSON.stringify(secret1, null, 2)}`);
+    console.log(` secret2: ${JSON.stringify(secret2, null, 2)}`);
+    console.log(` secret3: ${JSON.stringify(secret3, null, 3)}`);
+}
+main2();
+ */
