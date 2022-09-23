@@ -8,8 +8,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    ports:
-      - "3100:3100"
     volumes:
       - /app/node_modules
       - .:/app

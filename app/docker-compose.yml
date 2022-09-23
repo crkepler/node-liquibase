@@ -2,14 +2,13 @@ version: "3"
 
 services:
   app-node-liquibase:
-    image: crkepler/app-node-liquibase
+    # image: crkepler/app-node-liquibase
+    image: 520156139039.dkr.ecr.us-east-1.amazonaws.com/sp-repo
     container_name: app-node-liquibase
     restart: always
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3100:3100"
     volumes:
       - ./logs:/app/logs
       - ./liquibase:/app/liquibase

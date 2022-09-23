@@ -1,5 +1,7 @@
+#AWS region where this will run
+aws-region: us-east-1
 # This value is fixed, it's the location of the driver for the database used, MS-SQL Server in this case
-liquibaseClasspath: './node_modules/liquibase/dist/drivers/mssql-jdbc-7.4.1.jre8.jar'
+liquibaseClasspath: "./node_modules/liquibase/dist/drivers/mssql-jdbc-7.4.1.jre8.jar"
 # There's only one single db to be used as a base reference.
 # This is the base DB that will be used as a reference when doing diffChangeLog (test_2 in this example):
 referenceUrl: jdbc:sqlserver://host.docker.internal:1433;database=test_2;TrustServerCertificate=True

@@ -20,6 +20,8 @@ ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
 #  to this path in the container
 WORKDIR '/app'
 
+ENV NODE_ENV="dev"
+
 COPY ./package.json ./
 
 RUN npm install

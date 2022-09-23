@@ -19,10 +19,11 @@ ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
 #  to this path in the container
 WORKDIR '/app'
 COPY . .
+
+ENV NODE_ENV="production"
 RUN npm install
 
-# not needed locally, but used by AWS ElasticBeanStalk
-EXPOSE 3100
+# keeps the container up and running
+# must ensure during build both dir and file exist or the container will quit
+ENTRYPOINT ["tail", "-f", "/app/logs/activity.log"]
 
-# still, this isn't a hot reload
-CMD ["echo", "ready to receive commands"]

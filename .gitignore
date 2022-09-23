@@ -1,4 +1,2 @@
 .idea
-# Logs
-logs
-*.log
+build/

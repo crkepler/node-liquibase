@@ -1,5 +1,6 @@
-const {logger} = require('./loggerConfig');
-const {SecretsManager} = require('@aws-sdk/client-secrets-manager');
+const {logger} = require("./loggerConfig");
+const {SecretsManager} = require("@aws-sdk/client-secrets-manager");
+const config = require("config");
 /**
  * When the container is running in AWS, it can access AWS Secrets Manager directly from there, no credentials should
  * be needed other than setting up permissions.
@@ -17,60 +18,72 @@ const {SecretsManager} = require('@aws-sdk/client-secrets-manager');
 
 /**
  * This is to access the AWS Secrets Manager from localhost (rare)
- * You must setup the followong environmental variables (in .env) for this to happen:
+ * You must set up the following environmental variables (in .env) for this to happen:
  * AWS_PROFILE_NAME -- if using profile instead of pasting your secret keys
  * AWS_REGION_NAME -- us-east-1
  * AWS_ACCESS_KEY_ID -
  * AWS_SECRET_ACCESS_KEY -
  */
-const {fromIni} = require("@aws-sdk/credential-providers");
-const secretsFile = require("../config/secrets-dev.json");
+//const { fromIni } = require("@aws-sdk/credential-providers");
+//const secretsFile = require("../config/secrets-dev.json");
 
-
-let region = process.env.AWS_REGION_NAME;
-let awsKeyId = process.env.AWS_ACCESS_KEY_ID;
-let secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+//let region = process.env.AWS_REGION_NAME;
+//let awsKeyId = process.env.AWS_ACCESS_KEY_ID;
+//let secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 //or, use the keys stored in the ~/.aws/credentials (C:\users\USER_NAME\.aws\credentials)
-let awsProfile = process.env.AWS_PROFILE_NAME || 'default';
+//let awsProfile = process.env.AWS_PROFILE_NAME || "default";
 
 //this is the secret name in AWS:
 let secretName = "allDbSecrets";
-let cachedSecrets = null;
+let cachedSecrets = {
+    allDbSecrets: [
+        {
+            name: "",
+            username: "",
+            password: ""
+        }
+    ]
+};
 
 /**
  * Secrets should be initialized only when the app runs to avoid unnecessary calls to the secret store
- * In this case, everytime a command runs, it'll call the secrets, for for every db secret, the cachedSecrets is used.
+ * In this case, everytime a command runs, it'll call the secrets, for every db secret, the cachedSecrets is used.
  * Also, initSecrets is async, whereas getSecrets is not.
- * @param secretItemName
  * @returns {Promise<void>}
  */
 const initSecrets = async () => {
-
     //running locally, accessing the AWS secrets (rare):
     /*
-    const secretsManager = new SecretsManager({
-        region: region,
-        credentials: fromIni({profile: awsProfile}),
-        accessKeyId: '',
-        secretAccessKey: ''
-    });
-    */
-    if (process.env.NODE_ENV === 'production') {
-        const secretsManager = new SecretsManager();
+      const secretsManager = new SecretsManager({
+          region: region,
+          credentials: fromIni({profile: awsProfile}),
+          accessKeyId: '',
+          secretAccessKey: ''
+      });
+      */
+    if (process.env.NODE_ENV === "production") {
+        try {
+            const secretsManager = new SecretsManager({
+                    region: config.get("aws-region")
+                }
+            );
 
-        const secret = await secretsManager.getSecretValue({SecretId: secretName});
-        //the returning Object has a property called "SecretString" and its value is a string, but
-        // we store it as a JSON string, so we need to parse it (string --> obj)
-        cachedSecrets = JSON.parse(secret.SecretString);
-        logger.info(`Secrets successfully initialized from AWS Secrets Manager`);
-
-    } else if (process.env.NODE_ENV === 'dev') {
-        cachedSecrets = require('../config/secrets-dev.json');
+            const secret = await secretsManager.getSecretValue({
+                SecretId: secretName,
+            });
+            //the returning Object has a property called "SecretString" and its value is a string, but
+            // we store it as a JSON string, so we need to parse it (string --> obj)
+            cachedSecrets = JSON.parse(secret.SecretString);
+            logger.info(`Secrets successfully initialized from AWS Secrets Manager`);
+        } catch (err) {
+            logger.error(`Error getting secrets from AWS Secrets Manager`, err);
+        }
+    } else if (process.env.NODE_ENV === "dev") {
+        cachedSecrets = require("../config/secrets-dev.json");
         logger.info(`Secrets successfully initialized from secrets-dev.json`);
         //console.log(`----all cached secrets: ${JSON.stringify(cachedSecrets, null, 2)}`);
     }
-
-}
+};
 
 /**
  * Iterates through the cachedSecrets array. It's read from the AWS Secrets Manager store (NODE_ENV=production) or
@@ -78,17 +91,17 @@ const initSecrets = async () => {
  * @param secretItemName
  * @returns {*} an Object matching the secretItemName from the secrets-dev.json or AWS Secrets Manager
  */
-const getSecret = secretItemName => {
-    let secretValue = cachedSecrets.allDbSecrets.filter(key => {
+const getSecret = (secretItemName) => {
+    let secretValue = cachedSecrets.allDbSecrets.filter((key) => {
         if (key.name === secretItemName) {
             return key;
         }
     });
-    //console.log(`secretvalue[0]: ${JSON.stringify(secretValue[0], null, 2)}`);
+    //console.log(`secretValue[0]: ${JSON.stringify(secretValue[0], null, 2)}`);
     return secretValue[0];
-}
+};
 
 module.exports = {
     initSecrets,
-    getSecret
-}
+    getSecret,
+};
