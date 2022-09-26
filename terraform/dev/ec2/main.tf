@@ -9,7 +9,7 @@ terraform {
 
   backend "s3" {
     bucket         = "sp-docker-liquibase-project-state"
-    key            = "dev/terraform.tfstate"
+    key            = "dev/ec2/terraform.tfstate"
     region         = "us-east-1" //move this into variable, leaving it here for readability
     profile        = "tf-cli"
     dynamodb_table = "sp-docker-liquibase-project-locks"
@@ -18,9 +18,7 @@ terraform {
 }
 
 
-variable "awsProps" {
-  type    = map(string)
-  default = {
+locals {
     region       = "us-east-1"
     profile      = "tf-cli"
     vpc          = "vpc-96aa37ef"
@@ -31,22 +29,21 @@ variable "awsProps" {
     publicIp     = "true"
     keyName      = "sp-docker-liquibase-creds"
     secGroupName = "sp-docker-lb-sec-group"
-  }
 }
 
 provider "aws" {
   # This is the AWS profile you create in ~/.aws/credentials file (c:\users\USER_NAME\.aws\credentials in windows)
   # I created an user in AWS called tf-cli and grante access roles for what is needed in this terraform, like
   # EC2Admin, S3Admin, etc. You can be more specific if you want.
-  profile = lookup(var.awsProps, "profile")
-  region  = lookup(var.awsProps, "region")
+  profile = local.profile
+  region  = local.region
 }
 
 
 resource "aws_security_group" "sp-ec2-sec-group" {
-  name        = lookup(var.awsProps, "secGroupName")
-  description = lookup(var.awsProps, "secGroupName")
-  vpc_id      = lookup(var.awsProps, "vpc")
+  name        = local.secGroupName
+  description = local.secGroupName
+  vpc_id      = local.vpc
 
   // To Allow SSH Transport
   ingress {
@@ -78,11 +75,11 @@ resource "aws_security_group" "sp-ec2-sec-group" {
 
 
 resource "aws_instance" "sp-ec2" {
-  ami                         = lookup(var.awsProps, "ami")
-  instance_type               = lookup(var.awsProps, "iType")
+  ami                         = local.ami
+  instance_type               = local.iType
   //subnet_id = lookup(var.awsProps, "subnet") #FFXsubnet2
-  associate_public_ip_address = lookup(var.awsProps, "publicIp")
-  key_name                    = lookup(var.awsProps, "keyName")
+  associate_public_ip_address = local.publicIp
+  key_name                    = local.keyName
   iam_instance_profile        = aws_iam_instance_profile.sp-ec2-instance-profile.name
 
 
@@ -122,8 +119,23 @@ sudo curl -L "https://github.com/docker/compose/releases/download/1.28.2/docker-
 ## Make it executable
 sudo chmod +x /usr/local/bin/docker-compose
 
-## Docker-compose still ins't in the path yet, so add symbolic link (symlink)
+## Docker-compose still isn't in the path yet, so add symbolic link (symlink)
 sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+# The CloudWatch agent will look for this file, make sure it's there.
+mkdir -p /home/ec2-user/build/logs
+touch /home/ec2-user/build/logs/activity.log
+# Change ownership to ec2-user (from root)
+sudo chown -R ec2-user:ec2-user /home/ec2-user/build
+
+## Install the CloudWatch agent
+sudo yum install amazon-cloudwatch-agent -y
+
+## Start the Cloud Watch agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+-a fetch-config \
+-m ec2 \
+-c ssm:${aws_ssm_parameter.cloudwatch_agent.name} -s
 
    EOF
 
@@ -136,106 +148,32 @@ sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
   depends_on = [aws_security_group.sp-ec2-sec-group]
 }
 
-
-//IAM roles - move to separate file
-
-
-
 /**
-* Creates new role, attaching existing AWS polices.
-* It Allows the EC2 instance to access RDS, Secrets Manager, and the ECR (Elastic Container Service)
+* Stores the CloudWatch configuration file in the SSM parameter store, so when the EC2 starts, it can
+* start the CW Agent right away
 */
-variable "awsPropsRoles" {
-  type    = map(string)
-  default = {
-    roleName = "sp-ec2-2-rds-ecr-sm"
-  }
-}
-
-
-data "aws_iam_policy" "rds_full_access" {
-  arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
-}
-
-data "aws_iam_policy" "secrets_manager_rw" {
-  arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
-}
-
-data "aws_iam_policy" "ecr_build_pull" {
-  arn = "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilderECRContainerBuilds"
-}
-
-#resource "aws_iam_role_policy_attachment" "attach_policy" {
-#  policy_arn = [
-#    data.aws_iam_policy.rds_full_access,
-#    data.aws_iam_policy.secrets_manager_rw,
-#    data.aws_iam_policy.ecr_build_pull,
-#  ]
-#  role = lookup(var.awsPropsRoles, "roleName")
-#}
-
-# This is from the "trust relationships" tab in the AWS console, IAM roles. Convert it to the format below.
-# Returns an object that can be concerted to a JSON (below).
-# By using "data" Terraform checks and validates the roles
-data "aws_iam_policy_document" "ec2-assume-role-policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    effect = "Allow"
-    principals {
-      identifiers = ["ec2.amazonaws.com"]
-      type        = "Service"
-    }
-  }
-}
-
-# This is going to create IAM role but we can’t link this role to AWS instance and for that,
-# we need EC2 instance Profile (next resource). What a pain.
-resource "aws_iam_role" "sp-ec2-role" {
-  name                = lookup(var.awsPropsRoles, "roleName")
-  assume_role_policy  = data.aws_iam_policy_document.ec2-assume-role-policy.json
-
-  managed_policy_arns = [
-    data.aws_iam_policy.rds_full_access.arn,
-    data.aws_iam_policy.secrets_manager_rw.arn,
-    data.aws_iam_policy.ecr_build_pull.arn
-  ]
-  path = "/sp/"
-}
-
-# We can't attach a role directly to an EC2 instance, it needs an "instance profile" in the middle. The AWS Console
-# does this behind the scenes. For info here: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html
-resource "aws_iam_instance_profile" "sp-ec2-instance-profile" {
-  name = "sp-ec2-instance-profile"
-  role = aws_iam_role.sp-ec2-role.name
+resource "aws_ssm_parameter" "cloudwatch_agent" {
+  description = "Cloudwatch agent config to configure custom log"
+  name        = "/cloudwatch-agent/config"
+  type        = "String"
+  value       = file("${path.module}/cloudwatch-agent-config.json")
 }
 
 /*
-Role name: sp-ec2-2-rds-ecr-sm
-AmazonRDSFullAccess	AWS managed	Permissions policy
-SecretsManagerReadWrite	AWS managed	Permissions policy
-EC2InstanceProfileForImageBuilderECRContainerBuilds
+//start the agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+-a fetch-config \
+-m ec2 \
+-c ssm:"/cloudwatch-agent/config" -s
 
-arn:aws:iam::aws:policy/AmazonRDSFullAccess
-arn:aws:iam::aws:policy/SecretsManagerReadWrite
-arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilderECRContainerBuilds
+//get cloudwatch agent status:
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -m ec2 -a status
 
+//stop the agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -m ec2 -a stop
 
-trusted entitities
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "sts:AssumeRole"
-            ],
-            "Principal": {
-                "Service": [
-                    "ec2.amazonaws.com"
-                ]
-            }
-        }
-    ]
-}
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
 
 */
+
+
